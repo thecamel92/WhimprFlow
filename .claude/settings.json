@@ -1,0 +1,66 @@
+{
+  "env": {
+    "CAMEL_HOOKS": "on",
+    "CAMEL_TYPECHECK": "1"
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); sid=$(printf \"%s\" \"$input\" | jq -r \".session_id // \\\"nosess\\\"\" 2>/dev/null); marker=\"${TMPDIR:-/tmp}/claude-structure-reminder-$sid\"; [ -f \"$marker\" ] && exit 0; appchanges=$(git status --porcelain 2>/dev/null | grep -E \"^.{2} app/\"); structurechanges=$(git status --porcelain 2>/dev/null | grep -E \"^.{2} Structure/\"); if [ -n \"$appchanges\" ] && [ -z \"$structurechanges\" ]; then touch \"$marker\"; printf \"%s\" \"{\\\"systemMessage\\\":\\\"Reminder: code under app/ changed but Structure/ docs were not updated this session. Per the Keep Structure/ current rule in CLAUDE.md, review whether decisions-product.md, decisions-technical.md, checkpoints.md, structure.md (or section-library.md / design-system.md / alerts.md), or unfinished_work.md need updating.\\\"}\"; fi; exit 0",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/stop-typecheck.cjs\"",
+            "timeout": 250
+          }
+        ],
+        "description": "Batched typecheck of files edited this session (opt-in: CAMEL_TYPECHECK=1)"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/guard-paths.cjs\"",
+            "timeout": 5
+          }
+        ],
+        "description": "Block the Liquid mirror during ordinary work; demand a heads-up on high-consequence files"
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/block-raw-hex.cjs\"",
+            "timeout": 5
+          }
+        ],
+        "description": "Block raw hex (incl. var() fallbacks) in *.styles.ts sub-variant payloads; nudge on hardcoded px"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/accumulate-edits.cjs\"",
+            "timeout": 5
+          }
+        ],
+        "description": "Record edited paths for the Stop-time cross-file checks"
+      }
+    ]
+  }
+}
